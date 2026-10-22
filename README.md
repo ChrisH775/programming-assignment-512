@@ -1,5 +1,7 @@
 # Smart Campus Resource Booking System
 Programming 512 — a simple Python, Tkinter and SQLite desktop project.
+The current version uses shared setup, login and registration forms and shorter
+on-screen instructions, while retaining all booking features.
 
 ## Run
 Install Python 3 with Tkinter (included in the standard Windows installer).

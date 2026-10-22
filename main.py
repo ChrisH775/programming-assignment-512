@@ -9,11 +9,11 @@ from booking import BookingSystem, Lecturer, SystemOperator, check_booking_polic
 
 class BookingApp:
     def __init__(self, root, system):
-        self.root = root
+        self.root=root
         self.system = system
-        self.user = None
+        self.user=None
         self.root.title("Smart Campus Resource Booking System")
-        self.root.geometry("1000x720")
+        self.root.geometry('1000x720')
         self.root.minsize(850, 650)
         self.root.protocol("WM_DELETE_WINDOW", self.close)
         self.login_screen()
@@ -25,75 +25,70 @@ class BookingApp:
 
     def entry(self, frame, label, row, secret=False):
         ttk.Label(frame, text=label).grid(row=row, column=0, sticky="w", padx=5, pady=5)
-        field = ttk.Entry(frame, width=30, show="*" if secret else "")
+        field=ttk.Entry(frame,width=30)
+        if secret:
+            field.config(show='*')
         field.grid(row=row, column=1, padx=5, pady=5)
         return field
 
     def login_screen(self):
         self.user = None
-        self.clear()
-        frame = ttk.Frame(self.root, padding=30)
-        frame.pack(pady=60)
-        ttk.Label(frame, text="Smart Campus Resource Booking", font=("Arial", 18)).grid(
-            row=0, columnspan=2, pady=20)
         if self.system.needs_setup():
-            ttk.Label(frame, text="First run: choose a private setup password (8+ characters).\n"
-                      "This creates operator and admin1, admin2, admin3.\n"
-                      "These four local demonstration accounts share this password.").grid(
-                          row=1, columnspan=2, pady=10)
-            self.password = self.entry(frame, "Setup password", 2, True)
-            self.confirm = self.entry(frame, "Confirm password", 3, True)
-            ttk.Button(frame, text="Complete setup", command=self.setup).grid(row=4, columnspan=2, pady=10)
+            self.account_screen("setup")
         else:
-            self.username = self.entry(frame, "Username", 1)
-            self.password = self.entry(frame, "Password", 2, True)
-            ttk.Button(frame, text="Log in", command=self.login).grid(row=3, columnspan=2, pady=10)
-            ttk.Button(frame, text="Register lecturer", command=self.registration_screen).grid(
-                row=4, columnspan=2, pady=10)
-        ttk.Label(frame, text="Educational desktop application — local data only.").grid(
-            row=5, columnspan=2, pady=20)
-
-    def setup(self):
-        try:
-            if self.password.get() != self.confirm.get():
-                raise ValueError("Passwords do not match.")
-            self.system.setup(self.password.get())
-            messagebox.showinfo("Setup complete", "Log in as operator or admin1, admin2, admin3.")
-            self.login_screen()
-        except (ValueError, sqlite3.Error) as error:
-            messagebox.showerror("Setup error", str(error))
-
-    def login(self):
-        try:
-            self.user = self.system.login(self.username.get(), self.password.get())
-            self.dashboard()
-        except (ValueError, sqlite3.Error) as error:
-            messagebox.showerror("Login error", str(error))
+            self.account_screen("login")
 
     def registration_screen(self):
+        self.account_screen("register")
+
+    def account_screen(self, mode):
         self.clear()
+        self.account_mode=mode
         frame = ttk.Frame(self.root, padding=30)
         frame.pack(pady=60)
-        ttk.Label(frame, text="Register lecturer", font=("Arial", 18)).grid(row=0, columnspan=2, pady=20)
-        self.username = self.entry(frame, "Username", 1)
-        self.password = self.entry(frame, "Password (8+ characters)", 2, True)
-        self.confirm = self.entry(frame, "Confirm password", 3, True)
-        ttk.Button(frame, text="Register", command=self.register).grid(row=4, columnspan=2, pady=10)
-        ttk.Button(frame, text="Back to login", command=self.login_screen).grid(row=5, columnspan=2)
+        if mode=="setup":
+            title = 'First-time setup'
+            ttk.Label(frame, text="Create a password for operator, admin1, admin2 and admin3.").grid(
+                row=1, columnspan=2, pady=10)
+        else:
+            title='Log in'
+            if mode == "register":
+                title = "Register lecturer"
+            self.username = self.entry(frame, "Username", 1)
+        ttk.Label(frame, text=title, font=("Arial", 18)).grid(row=0, columnspan=2, pady=20)
+        self.password = self.entry(frame, "Password", 2, True)
+        if mode != "login":
+            self.confirm = self.entry(frame, "Confirm password", 3, True)
+            ttk.Label(frame, text="Use at least 8 characters.").grid(row=4, columnspan=2, pady=5)
+        ttk.Button(frame, text=title, command=self.submit_account).grid(row=5, columnspan=2, pady=10)
+        if mode == "login":
+            ttk.Button(frame, text="Register lecturer", command=self.registration_screen).grid(
+                row=6, columnspan=2)
+        elif mode == "register":
+            ttk.Button(frame, text="Back to login", command=self.login_screen).grid(row=6, columnspan=2)
 
-    def register(self):
+    def submit_account(self):
         try:
-            if self.password.get() != self.confirm.get():
+            mode=self.account_mode
+            if mode != "login" and self.password.get() != self.confirm.get():
                 raise ValueError("Passwords do not match.")
-            self.system.register(self.username.get(), self.password.get())
-            messagebox.showinfo("Registered", "Your lecturer account is ready. Please log in.")
+            if mode == "setup":
+                self.system.setup(self.password.get())
+                messagebox.showinfo("Success", "Setup complete. Please log in.")
+            elif mode=="register":
+                self.system.register(self.username.get(), self.password.get())
+                messagebox.showinfo("Success", "Account created. Please log in.")
+            else:
+                self.user = self.system.login(self.username.get(), self.password.get())
+                self.dashboard()
+                return
             self.login_screen()
         except (ValueError, sqlite3.Error) as error:
-            messagebox.showerror("Registration error", str(error))
+            messagebox.showerror("Error", str(error))
 
     def dashboard(self):
         self.clear()
-        top = ttk.Frame(self.root, padding=10)
+        top=ttk.Frame(self.root, padding=10)
         top.pack(fill="x")
         ttk.Label(top, text=self.user.username + " — " + self.user.role_name(),
                   font=("Arial", 14)).pack(side="left")
@@ -102,8 +97,11 @@ class BookingApp:
         campus_frame.pack(fill="x")
         ttk.Label(campus_frame, text="Active campus:").pack(side="left")
         self.campus_list = self.system.campuses(self.user)
+        campus_names=[]
+        for campus in self.campus_list:
+            campus_names.append(campus["name"])
         self.campus_choice = ttk.Combobox(
-            campus_frame, values=[c["name"] for c in self.campus_list], state="readonly", width=24)
+            campus_frame, values=campus_names, state="readonly", width=24)
         self.campus_choice.pack(side="left", padx=10)
         self.campus_choice.current(0)
         self.campus_choice.bind("<<ComboboxSelected>>", self.change_campus)
@@ -114,7 +112,10 @@ class BookingApp:
         self.resource_tab = ttk.Frame(self.tabs, padding=10)
         self.booking_tab = ttk.Frame(self.tabs, padding=10)
         self.tabs.add(self.resource_tab, text="Resources and availability")
-        self.tabs.add(self.booking_tab, text="My bookings" if isinstance(self.user, Lecturer) else "Campus bookings")
+        if isinstance(self.user, Lecturer):
+            self.tabs.add(self.booking_tab, text="My bookings")
+        else:
+            self.tabs.add(self.booking_tab, text="Campus bookings")
         self.build_resources()
         self.build_bookings()
         if not isinstance(self.user, Lecturer):
@@ -132,8 +133,8 @@ class BookingApp:
         return self.campus_list[self.campus_choice.current()]
 
     def change_campus(self, event=None):
-        campus = self.campus()
-        self.policy_label.config(text="Demonstration policy: " + campus["name"] + " | "
+        campus=self.campus()
+        self.policy_label.config(text="Booking policy: "
                                  + campus["opens"] + "–" + campus["closes"] + " | Maximum "
                                  + str(campus["max_minutes"]) + " minutes per booking")
         self.refresh_resources()
@@ -142,20 +143,20 @@ class BookingApp:
             self.show_campus_report()
 
     def build_resources(self):
-        form = ttk.Frame(self.resource_tab)
+        form=ttk.Frame(self.resource_tab)
         form.pack(anchor="w")
         self.date = self.entry(form, "Date (YYYY-MM-DD)", 0)
         self.date.insert(0, (datetime.now() + timedelta(days=1)).strftime("%Y-%m-%d"))
         self.time = self.entry(form, "Start (HH:MM)", 1)
-        self.time.insert(0, "10:00")
+        self.time.insert(0,'10:00')
         self.duration = self.entry(form, "Duration (minutes)", 2)
-        self.duration.insert(0, "60")
+        self.duration.insert(0, '60')
         ttk.Button(form, text="Check selected time", command=self.check_time).grid(row=3, column=0, pady=8)
         ttk.Button(form, text="Show availability now", command=self.show_now).grid(row=3, column=1)
         self.availability_label = ttk.Label(self.resource_tab, text="Availability now")
         self.availability_label.pack(anchor="w", pady=5)
         self.resource_tree = self.table(self.resource_tab, ("ID", "Resource", "Availability"), 5)
-        self.selected_interval = None
+        self.selected_interval=None
         actions = ttk.Frame(self.resource_tab)
         actions.pack(fill="x", pady=8)
         if isinstance(self.user, Lecturer):
@@ -189,7 +190,7 @@ class BookingApp:
         return int(selection[0])
 
     def refresh_resources(self):
-        selected = self.resource_tree.selection()
+        selected=self.resource_tree.selection()
         self.resource_tree.delete(*self.resource_tree.get_children())
         if self.selected_interval:
             start, end = self.selected_interval
@@ -197,7 +198,9 @@ class BookingApp:
             start = datetime.now().isoformat(timespec="seconds")
             end = (datetime.now() + timedelta(seconds=1)).isoformat(timespec="seconds")
         for resource in self.system.resources(self.user, self.campus()["id"]):
-            status = "Available" if self.system.is_available(resource["id"], start, end) else "Booked"
+            status='Booked'
+            if self.system.is_available(resource["id"], start, end):
+                status = "Available"
             self.resource_tree.insert("", "end", iid=str(resource["id"]),
                                       values=(resource["id"], resource["name"], status))
         if selected and self.resource_tree.exists(selected[0]):
@@ -205,7 +208,7 @@ class BookingApp:
 
     def show_now(self):
         self.selected_interval = None
-        self.availability_label.config(text="Availability now (refreshes every 10 seconds)")
+        self.availability_label.config(text="Availability now")
         self.refresh_resources()
 
     def check_time(self):
@@ -213,8 +216,8 @@ class BookingApp:
             start, end, minutes = check_booking_policy(
                 self.campus(), self.date.get(), self.time.get(), self.duration.get())
             self.selected_interval = (start.isoformat(timespec="minutes"), end.isoformat(timespec="minutes"))
-            self.availability_label.config(text="Checked interval: " + str(start) + " to " + str(end)
-                                           + " — check again after changing inputs.")
+            self.availability_label.config(text="Availability: " + start.strftime("%Y-%m-%d %H:%M")
+                                           + " to " + end.strftime("%H:%M"))
             self.refresh_resources()
         except ValueError as error:
             messagebox.showerror("Invalid time", str(error))
@@ -224,7 +227,7 @@ class BookingApp:
             booking_id = self.system.book(self.user, self.campus()["id"],
                                           self.selected_id(self.resource_tree),
                                           self.date.get(), self.time.get(), self.duration.get())
-            messagebox.showinfo("Booked", "Booking " + str(booking_id) + " saved.")
+            messagebox.showinfo("Booked", f"Booking {booking_id} saved.")
             self.refresh_resources()
             self.refresh_bookings()
         except (ValueError, sqlite3.Error) as error:
@@ -244,7 +247,9 @@ class BookingApp:
 
     def save_resource(self, update):
         try:
-            resource_id = self.selected_id(self.resource_tree) if update else None
+            resource_id = None
+            if update:
+                resource_id = self.selected_id(self.resource_tree)
             self.system.save_resource(self.user, self.campus()["id"], self.resource_name.get(), resource_id)
             self.refresh_resources()
             self.refresh_bookings()
@@ -254,7 +259,7 @@ class BookingApp:
     def remove_resource(self):
         try:
             resource_id = self.selected_id(self.resource_tree)
-            if messagebox.askyesno("Remove resource", "Remove the selected resource? History will be kept."):
+            if messagebox.askyesno("Remove resource", "Remove this resource?"):
                 self.system.remove_resource(self.user, self.campus()["id"], resource_id)
                 self.refresh_resources()
         except (ValueError, sqlite3.Error) as error:
@@ -271,9 +276,7 @@ class BookingApp:
         self.booking_filter.bind("<<ComboboxSelected>>", self.refresh_bookings)
         ttk.Button(bar, text="Refresh", command=self.refresh_bookings).pack(side="left")
         if isinstance(self.user, Lecturer):
-            ttk.Button(bar, text="Cancel selected future booking", command=self.cancel).pack(side="right")
-        ttk.Label(self.booking_tab, text="Bookings shown for the active campus. Switch campus to view others.").pack(
-            anchor="w", pady=8)
+            ttk.Button(bar, text="Cancel selected booking", command=self.cancel).pack(side="right")
         self.booking_tree = self.table(
             self.booking_tab, ("ID", "Lecturer", "Resource", "Start", "Minutes", "Status"), 12)
 
@@ -302,11 +305,11 @@ class BookingApp:
             messagebox.showerror("Cancellation error", str(error))
 
     def report_lines(self, campus_id):
-        report = self.system.report(self.user, campus_id)
+        report=self.system.report(self.user,campus_id)
         campus = report["campus"]
         lines = [campus["name"], "Policy: " + campus["opens"] + "–" + campus["closes"]]
         lines.append("Maximum session: " + str(campus["max_minutes"]) + " minutes")
-        lines.append("Total bookings: " + str(report["total"]))
+        lines.append("Total bookings: {}".format(report["total"]))
         lines.append("Booked time: " + str(report["minutes"]) + " minutes")
         lines.append("Average duration: " + str(round(report["average"], 1)) + " minutes")
         lines.append("Most frequently booked: " + report["most_used"])
@@ -324,14 +327,11 @@ class BookingApp:
         self.report_text.config(state="disabled")
 
     def show_campus_report(self):
-        self.write_report("All dates; cancelled bookings excluded. Includes future reservations.\n\n"
+        self.write_report("Bookings for all dates (cancelled bookings excluded).\n\n"
                           + self.report_lines(self.campus()["id"]))
 
     def show_comparison(self):
-        sections = ["CROSS-CAMPUS COMPARISON\nAll dates; cancelled bookings excluded.\n"
-                    "Booked time is reserved time, not measured attendance.\n"
-                    "Compare monthly counts and average duration with the different policies.\n"
-                    "Differences alone do not prove that a policy caused a trend."]
+        sections = ["CAMPUS COMPARISON\nBookings for all dates (cancelled bookings excluded)."]
         for campus in self.campus_list:
             sections.append(self.report_lines(campus["id"]))
         self.write_report("\n\n".join(sections))
@@ -351,8 +351,8 @@ class BookingApp:
 
 
 def main():
-    folder = os.path.dirname(os.path.abspath(__file__))
-    root = tk.Tk()
+    folder=os.path.dirname(os.path.abspath(__file__))
+    root=tk.Tk()
     try:
         system = BookingSystem(os.path.join(folder, "campus_booking.db"))
     except sqlite3.Error as error:

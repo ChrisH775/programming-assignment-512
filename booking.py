@@ -1,4 +1,4 @@
-"""Database and booking rules for the campus booking assignment."""
+
 import hashlib
 import hmac
 import os
@@ -8,7 +8,7 @@ from datetime import datetime, timedelta
 
 class User:
     def __init__(self, user_id, username, role, campus_id):
-        self.id = user_id
+        self.id=user_id
         self.username = username
         self._role = role
         self._campus_id = campus_id
@@ -25,7 +25,7 @@ class User:
 
 class Lecturer(User):
     def role_name(self):
-        return "Lecturer"
+        return 'Lecturer'
 
 
 class CampusAdministrator(User):
@@ -51,12 +51,12 @@ def check_booking_policy(campus, date, time, duration):
     """Return validated start and end times, or explain invalid input."""
     try:
         start = datetime.strptime(date + " " + time, "%Y-%m-%d %H:%M")
-        minutes = int(duration)
+        minutes=int(duration)
     except (ValueError, TypeError):
         raise ValueError("Use date YYYY-MM-DD, time HH:MM and whole minutes.")
     if minutes < 1 or minutes > campus["max_minutes"]:
         raise ValueError("Duration must be 1 to " + str(campus["max_minutes"]) + " minutes.")
-    end = start + timedelta(minutes=minutes)
+    end=start + timedelta(minutes=minutes)
     if start <= datetime.now():
         raise ValueError("Choose a future date and time.")
     if (end.date() != start.date()
@@ -68,7 +68,7 @@ def check_booking_policy(campus, date, time, duration):
 
 class BookingSystem:
     def __init__(self, filename):
-        self.db = sqlite3.connect(filename)
+        self.db=sqlite3.connect(filename)
         self.db.row_factory = sqlite3.Row
         self.db.execute("PRAGMA foreign_keys = ON")
         self.db.executescript("""
@@ -107,10 +107,10 @@ class BookingSystem:
         return self.db.execute("SELECT id FROM users WHERE role = 'operator'").fetchone() is None
 
     def _add_user(self, username, password, role, campus_id=None):
-        username = username.strip()
+        username=username.strip()
         if not username or len(username) > 40 or len(password) < 8:
             raise ValueError("Enter a username (1–40 characters) and password (8+ characters).")
-        salt = os.urandom(16).hex()
+        salt=os.urandom(16).hex()
         digest = hashlib.pbkdf2_hmac("sha256", password.encode(), bytes.fromhex(salt), 600000).hex()
         try:
             self.db.execute(
@@ -144,12 +144,16 @@ class BookingSystem:
             digest = hashlib.pbkdf2_hmac(
                 "sha256", password.encode(), bytes.fromhex(row["salt"]), 600000).hex()
             if hmac.compare_digest(digest, row["password_hash"]):
-                classes = {"lecturer": Lecturer, "admin": CampusAdministrator, "operator": SystemOperator}
-                return classes[row["role"]](row["id"], row["username"], row["role"], row["campus_id"])
+                if row["role"]=="lecturer":
+                    return Lecturer(row["id"], row["username"], row["role"], row["campus_id"])
+                elif row["role"] == "admin":
+                    return CampusAdministrator(row["id"], row["username"], row["role"], row["campus_id"])
+                elif row["role"] == "operator":
+                    return SystemOperator(row["id"], row["username"], row["role"], row["campus_id"])
         raise ValueError("Incorrect username or password.")
 
     def campuses(self, user):
-        result = []
+        result=[]
         for row in self.db.execute("SELECT * FROM campuses ORDER BY id").fetchall():
             if user.can_visit(row["id"]):
                 result.append(dict(row))
@@ -168,14 +172,17 @@ class BookingSystem:
         rows = self.db.execute(
             "SELECT * FROM resources WHERE campus_id = ? AND active = 1 ORDER BY id",
             (campus_id,)).fetchall()
-        return [dict(row) for row in rows]
+        resources = []
+        for row in rows:
+            resources.append(dict(row))
+        return resources
 
     def save_resource(self, user, campus_id, name, resource_id=None):
         self._campus(user, campus_id)
         if not user.can_manage(campus_id):
             raise ValueError("Only administrators and operators can manage resources.")
-        name = name.strip()
-        if not name or len(name) > 80:
+        name=name.strip()
+        if len(name)==0 or len(name) > 80:
             raise ValueError("Enter a resource name (1–80 characters).")
         try:
             if resource_id is None:
@@ -246,11 +253,15 @@ class BookingSystem:
         sql = """SELECT b.*, u.username, r.name, r.campus_id FROM bookings b
                  JOIN users u ON b.user_id = u.id JOIN resources r ON b.resource_id = r.id
                  WHERE r.campus_id = ?"""
-        values = [campus_id]
+        values=[campus_id]
         if isinstance(user, Lecturer):
             sql += " AND b.user_id = ?"
             values.append(user.id)
-        return [dict(row) for row in self.db.execute(sql + " ORDER BY b.start DESC", values).fetchall()]
+        rows = self.db.execute(sql + " ORDER BY b.start DESC", values).fetchall()
+        bookings = []
+        for row in rows:
+            bookings.append(dict(row))
+        return bookings
 
     def cancel(self, user, booking_id):
         if not isinstance(user, Lecturer):
@@ -267,24 +278,33 @@ class BookingSystem:
         campus = self._campus(user, campus_id)
         if not user.can_manage(campus_id):
             raise ValueError("Reports are for administrators and operators.")
-        counts = {}
+        counts={}
         months = {}
         total_minutes = 0
-        total = 0
+        total=0
         for booking in self.bookings(user, campus_id):
             if booking["cancelled"]:
                 continue
-            total += 1
+            total = total + 1
             total_minutes += booking["duration"]
             name = booking["name"]
-            counts[name] = counts.get(name, 0) + 1
+            if name in counts:
+                counts[name] += 1
+            else:
+                counts[name] = 1
             month = booking["start"][:7]
             months[month] = months.get(month, 0) + 1
         most_used = "None"
         if counts:
             highest = max(counts.values())
-            most_used = ", ".join(name for name in counts if counts[name] == highest)
-        average = total_minutes / total if total else 0
+            names = []
+            for name in counts:
+                if counts[name] == highest:
+                    names.append(name)
+            most_used = ", ".join(names)
+        average=0
+        if total>0:
+            average = total_minutes / total
         return {"campus": campus, "total": total, "minutes": total_minutes,
                 "average": average, "most_used": most_used, "months": months}
 
